@@ -1,31 +1,36 @@
-import random
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
 
 app = Flask(__name__)
 
-# 저장된 모델 로드
-model = joblib.load("malicious_url_model.pkl")
+# 학습된 모델 로드
+model = joblib.load("malicious_url_model.pkl")  # 저장된 모델 파일
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.get_json()  # JSON 데이터 받기
-    X_input = np.array(data["input"])  # 입력 데이터를 numpy 배열로 변환
-    predictions = model.predict(X_input)  # 모델 예측 수행
+    data = request.json  # JSON 데이터 받기
+    urls = data.get("urls", [])  # 'urls' 키에서 리스트 가져오기
+    
+    if not urls:
+        return jsonify({"error": "No data provided"}), 400
+    try:
+    # 데이터를 NumPy 배열로 변환 (모델 입력 형식에 맞게 조정 필요)
+        X_input = np.array([list(d.values()) for d in data])  # 예시 (전처리 필요)
+    
+        predictions = model.predict(X_input)  # 모델 예측 수행
+    
+    # 결과를 JSON 형식으로 반환
+        result = {
+            "predictions": predictions.tolist(),
+            "count_0": int((predictions == 0).sum()),
+            "count_1": int((predictions == 1).sum())
+    }
+    
+        return jsonify(result)
 
-    # 예측 결과에서 1이 20개 나오도록 조정
-    ones_needed = 20 - np.sum(predictions)  # 현재 1 개수 확인 후 부족한 개수 계산
-    if ones_needed > 0:
-        indices = random.sample(range(len(predictions)), ones_needed)  # 무작위 인덱스 선택
-        for idx in indices:
-            predictions[idx] = 1  # 선택한 위치를 1로 변경
-
-    # 0과 1 개수 계산
-    count_0 = np.sum(predictions == 0)
-    count_1 = np.sum(predictions == 1)
-
-    return jsonify({"predictions": predictions.tolist(), "count_0": int(count_0), "count_1": int(count_1)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=9999, debug=True)
+    app.run('127.0.0.1', port=9999, debug=False)
